@@ -5,7 +5,7 @@ import PreviewCard from './components/PreviewCard';
 import ProgressBar from './components/ProgressBar';
 import ErrorAlert from './components/ErrorAlert';
 import FeatureGrid from './components/FeatureGrid';
-import { Sun, Github, Droplets, Zap } from 'lucide-react';
+import { Github, Droplets, Zap } from 'lucide-react';
 
 const API = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -57,7 +57,7 @@ export default function App() {
     try {
       const r = await fetch(`${API}/api/download`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId, formatId }),
+        body: JSON.stringify({ jobId, formatId, url: metadata?.url || urlValue }),
       });
       const d = await r.json();
       if (!r.ok) { es.close(); throw new Error(d.error || 'Download failed.'); }
@@ -116,7 +116,7 @@ export default function App() {
         {/* ══ NAVBAR ══════════════════════════════════════════════ */}
         <div className="flex justify-center pt-8 px-6">
           <nav className="nav-pill flex items-center justify-between px-7 rounded-full"
-            style={{ width: '100%', maxWidth: '620px', height: '64px' }}>
+            style={{ width: '100%', maxWidth: '640px', height: '64px' }}>
 
             {/* Logo */}
             <div className="flex items-center gap-3">
@@ -131,15 +131,7 @@ export default function App() {
 
             {/* Actions */}
             <div className="flex items-center gap-2">
-              <button onClick={toggleBg}
-                className="w-9 h-9 flex items-center justify-center rounded-xl transition-colors"
-                style={{ color: 'rgba(255,255,255,0.4)' }}
-                onMouseEnter={e => e.currentTarget.style.color='rgba(255,255,255,0.9)'}
-                onMouseLeave={e => e.currentTarget.style.color='rgba(255,255,255,0.4)'}
-                title="Toggle background">
-                <Sun className="w-4 h-4" strokeWidth={1.8} />
-              </button>
-              <a href="https://github.com" target="_blank" rel="noreferrer"
+              <a href="https://github.com/Bhoomikaxoxo/ClipDrop" target="_blank" rel="noreferrer"
                 className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-medium transition-all"
                 style={{
                   color: 'rgba(255,255,255,0.55)',
@@ -157,23 +149,23 @@ export default function App() {
 
         {/* ══ HERO ════════════════════════════════════════════════ */}
         <main className="flex-1 flex flex-col items-center justify-center px-6 text-center">
-          <div className="w-full" style={{ maxWidth: '760px' }}>
+          <div className="w-full" style={{ maxWidth: '640px' }}>
 
             {/* ── Badge — 72px below nav ── */}
-            <div style={{ height: '72px' }} />
+            <div style={{ height: '56px' }} />
             <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full badge text-[13px] font-medium"
               style={{ color: 'rgba(255,255,255,0.6)' }}>
               <Zap className="w-3.5 h-3.5" style={{ color: '#f59e0b' }} fill="#f59e0b" />
               Fast &nbsp;·&nbsp; Private &nbsp;·&nbsp; No Watermarks
             </div>
 
-            {/* ── Headline — 36px below badge ── */}
-            <div style={{ height: '36px' }} />
+            {/* ── Headline — 32px below badge ── */}
+            <div style={{ height: '32px' }} />
             <h1 className="font-display font-extrabold text-white"
               style={{
-                fontSize: 'clamp(3rem, 7vw, 5rem)',
-                lineHeight: '0.94',
-                letterSpacing: '-0.035em',
+                fontSize: 'clamp(2.2rem, 4.8vw, 3.6rem)',
+                lineHeight: '0.96',
+                letterSpacing: '-0.03em',
                 textShadow: '0 4px 48px rgba(0,0,0,0.8)',
               }}>
               Paste.{' '}
@@ -183,12 +175,12 @@ export default function App() {
               Quality.
             </h1>
 
-            {/* ── Subtitle — 24px below headline ── */}
-            <div style={{ height: '24px' }} />
-            <p className="mx-auto text-[17px] leading-relaxed"
+            {/* ── Subtitle — 20px below headline ── */}
+            <div style={{ height: '20px' }} />
+            <p className="mx-auto text-[15px] leading-relaxed"
               style={{
                 color: 'rgba(255,255,255,0.62)',
-                maxWidth: '520px',
+                maxWidth: '480px',
                 textShadow: '0 2px 16px rgba(0,0,0,0.6)',
               }}>
               Paste any YouTube video or Instagram Reel URL to instantly download the original video in the highest available quality. No login. No waiting.

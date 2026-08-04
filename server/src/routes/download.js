@@ -66,13 +66,33 @@ router.get('/progress/:jobId', (req, res) => {
  * Triggers yt-dlp file download into temp dir for specified format
  */
 router.post('/download', async (req, res) => {
-  const { jobId, formatId } = req.body;
+  const { jobId, formatId, url } = req.body;
 
-  if (!jobId || !jobsStore.has(jobId)) {
-    return res.status(404).json({ error: 'Job session not found or expired. Please extract metadata again.' });
+  if (!jobId) {
+    return res.status(400).json({ error: 'Missing jobId' });
   }
 
-  const job = jobsStore.get(jobId);
+  let job;
+  if (jobsStore.has(jobId)) {
+    job = jobsStore.get(jobId);
+  } else if (url) {
+    const { fetchMetadata } = await import('../utils/ytdlp.js');
+    try {
+      const metadata = await fetchMetadata(url);
+      job = {
+        jobId,
+        url,
+        status: 'extracted',
+        metadata,
+        createdAt: Date.now()
+      };
+      jobsStore.set(jobId, job);
+    } catch (e) {
+      return res.status(404).json({ error: 'Job session expired. Please paste the URL again.' });
+    }
+  } else {
+    return res.status(404).json({ error: 'Job session expired. Please paste the URL again.' });
+  }
 
   // Acquire job lock
   if (!acquireJobLock(jobId)) {
@@ -85,6 +105,13 @@ router.post('/download', async (req, res) => {
   if (metadata && metadata.formats) {
     targetFormat = metadata.formats.find(f => f.formatId === formatId);
   }
+
+  // Find audio-only format to get expected byte size for progress weighting.
+  // This is passed to downloadMedia so the video/audio progress split is
+  // proportional to actual stream sizes rather than a fixed 85/10 ratio.
+  const audioFormat = metadata && metadata.formats
+    ? metadata.formats.find(f => f.isAudioOnly)
+    : null;
 
   job.status = 'downloading';
   job.percent = 0;
@@ -100,6 +127,8 @@ router.post('/download', async (req, res) => {
       isAudioOnly: targetFormat ? targetFormat.isAudioOnly : false,
       resHeight: targetFormat ? targetFormat.resHeight : null,
       needsTranscode: targetFormat ? targetFormat.needsTranscode : false,
+      videoBytes: targetFormat ? targetFormat.rawBytes : null,
+      audioBytes: audioFormat ? audioFormat.rawBytes : null,
       jobId,
       onProgress: ({ percent, speed, eta, status }) => {
         job.percent = percent;
