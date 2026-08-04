@@ -177,15 +177,13 @@ export function fetchMetadata(url) {
       }
     });
 
-    child.on('close', (code) => {
       if (code !== 0) {
-        let msg = 'Failed to extract video metadata.';
+        const stderrSnippet = stderrData.trim().slice(-300);
+        let msg = `Failed to extract metadata (${stderrSnippet || 'yt-dlp exit code ' + code})`;
         if (stderrData.includes('cookies') || stderrData.includes('login') || stderrData.includes('Private')) {
-          msg = 'Content is private or requires authentication cookies. Unable to extract.';
+          msg = `Content is private or requires authentication cookies (${stderrSnippet})`;
         } else if (stderrData.includes('429') || stderrData.includes('Too Many Requests')) {
-          msg = 'Rate limited by platform. Please try again later.';
-        } else if (platform === 'instagram') {
-          msg = 'Instagram extraction failed. Instagram frequently updates their API — try updating yt-dlp on the server (`yt-dlp -U`).';
+          msg = `Rate limited by platform (${stderrSnippet})`;
         }
         return reject(new Error(msg));
       }
