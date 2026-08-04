@@ -139,6 +139,28 @@ function parseAndFormatEta(rawEta, percent, startTime) {
  * Extracts full JSON metadata using `yt-dlp -J` with performance timeouts.
  * Prioritizes H.264 (avc1) + AAC (mp4a) formats for QuickTime compatibility.
  */
+/**
+ * Helper to resolve cookies.txt path from project root or YTDLP_COOKIES environment variable.
+ */
+function getCookiesPath() {
+  const localCookies = path.join(process.cwd(), 'cookies.txt');
+  if (fs.existsSync(localCookies)) return localCookies;
+
+  const serverCookies = path.join(process.cwd(), 'server', 'cookies.txt');
+  if (fs.existsSync(serverCookies)) return serverCookies;
+
+  if (process.env.YTDLP_COOKIES) {
+    const tmpCookies = path.join(TEMP_DIR, 'render_cookies.txt');
+    try {
+      fs.writeFileSync(tmpCookies, process.env.YTDLP_COOKIES, 'utf8');
+      return tmpCookies;
+    } catch (e) {
+      console.error('Failed to write YTDLP_COOKIES env var to file:', e);
+    }
+  }
+  return null;
+}
+
 export function fetchMetadata(url) {
   return new Promise((resolve, reject) => {
     const { valid, platform, url: sanitizedUrl } = validateUrl(url);
@@ -146,8 +168,7 @@ export function fetchMetadata(url) {
       return reject(new Error('Invalid or unsupported URL. Please paste an Instagram Reel or YouTube URL.'));
     }
 
-    const cookiesPath = path.join(process.cwd(), 'cookies.txt');
-    const hasCookies = fs.existsSync(cookiesPath);
+    const cookiesPath = getCookiesPath();
 
     const args = [
       '-J',
@@ -159,7 +180,7 @@ export function fetchMetadata(url) {
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
     ];
 
-    if (hasCookies) {
+    if (cookiesPath) {
       args.push('--cookies', cookiesPath);
     }
 
@@ -373,8 +394,7 @@ export function downloadMedia({ url, formatId, hasAudio, isAudioOnly, resHeight,
       formatSpec = 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]';
     }
 
-    const cookiesPath = path.join(process.cwd(), 'cookies.txt');
-    const hasCookies = fs.existsSync(cookiesPath);
+    const cookiesPath = getCookiesPath();
 
     const args = [
       '-f', formatSpec,
@@ -387,7 +407,7 @@ export function downloadMedia({ url, formatId, hasAudio, isAudioOnly, resHeight,
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
     ];
 
-    if (hasCookies) {
+    if (cookiesPath) {
       args.push('--cookies', cookiesPath);
     }
 
