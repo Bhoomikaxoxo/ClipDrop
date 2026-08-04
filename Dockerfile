@@ -25,7 +25,7 @@ RUN npm run install:all
 COPY . .
 
 # Build Vite frontend bundle
-RUN npm run build
+RUN npm run build --prefix client
 
 EXPOSE 5001
 

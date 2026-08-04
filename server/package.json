@@ -7,6 +7,7 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/index.js",
+    "build": "echo 'Server build complete'",
     "start": "node src/index.js"
   },
   "dependencies": {
