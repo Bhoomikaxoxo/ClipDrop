@@ -151,7 +151,9 @@ export function fetchMetadata(url) {
       '--no-warnings',
       '--no-playlist',
       '--no-check-certificate',
-      '--socket-timeout', '15',
+      '--socket-timeout', '20',
+      '--extractor-args', 'youtube:player_client=mweb,android',
+      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
       sanitizedUrl
     ];
 
@@ -373,6 +375,8 @@ export function downloadMedia({ url, formatId, hasAudio, isAudioOnly, resHeight,
       '--no-check-certificate',
       '--socket-timeout', '30',
       '--concurrent-fragments', '4',  // Parallel fragment downloads for faster speeds
+      '--extractor-args', 'youtube:player_client=mweb,android',
+      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
       '-o', outputTemplate,
       sanitizedUrl
     ];
