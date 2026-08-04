@@ -177,6 +177,7 @@ export function fetchMetadata(url) {
       }
     });
 
+    child.on('close', (code) => {
       if (code !== 0) {
         const stderrSnippet = stderrData.trim().slice(-300);
         let msg = `Failed to extract metadata (${stderrSnippet || 'yt-dlp exit code ' + code})`;
