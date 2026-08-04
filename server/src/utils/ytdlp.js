@@ -146,16 +146,24 @@ export function fetchMetadata(url) {
       return reject(new Error('Invalid or unsupported URL. Please paste an Instagram Reel or YouTube URL.'));
     }
 
+    const cookiesPath = path.join(process.cwd(), 'cookies.txt');
+    const hasCookies = fs.existsSync(cookiesPath);
+
     const args = [
       '-J',
       '--no-warnings',
       '--no-playlist',
       '--no-check-certificate',
       '--socket-timeout', '20',
-      '--extractor-args', 'youtube:player_client=tv_embedded,web_creator,mweb',
+      '--extractor-args', 'youtube:player_client=android_vr,tv_embedded',
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
-      sanitizedUrl
     ];
+
+    if (hasCookies) {
+      args.push('--cookies', cookiesPath);
+    }
+
+    args.push(sanitizedUrl);
 
     const child = spawn(YTDLP_BIN, args, { maxBuffer: 15 * 1024 * 1024 });
     let stdoutData = '';
@@ -365,6 +373,9 @@ export function downloadMedia({ url, formatId, hasAudio, isAudioOnly, resHeight,
       formatSpec = 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]';
     }
 
+    const cookiesPath = path.join(process.cwd(), 'cookies.txt');
+    const hasCookies = fs.existsSync(cookiesPath);
+
     const args = [
       '-f', formatSpec,
       '--newline',           // One progress line per stdout write — essential for parsing
@@ -372,11 +383,15 @@ export function downloadMedia({ url, formatId, hasAudio, isAudioOnly, resHeight,
       '--no-check-certificate',
       '--socket-timeout', '30',
       '--concurrent-fragments', '4',  // Parallel fragment downloads for faster speeds
-      '--extractor-args', 'youtube:player_client=tv_embedded,web_creator,mweb',
+      '--extractor-args', 'youtube:player_client=android_vr,tv_embedded',
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
-      '-o', outputTemplate,
-      sanitizedUrl
     ];
+
+    if (hasCookies) {
+      args.push('--cookies', cookiesPath);
+    }
+
+    args.push('-o', outputTemplate, sanitizedUrl);
 
     if (isAudioOnly || formatId === 'bestaudio') {
       // Extract audio and convert to MP3
