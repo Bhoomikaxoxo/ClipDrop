@@ -152,7 +152,7 @@ export function fetchMetadata(url) {
       '--no-playlist',
       '--no-check-certificate',
       '--socket-timeout', '20',
-      '--extractor-args', 'youtube:player_client=ios,mweb',
+      '--extractor-args', 'youtube:player_client=tv_embedded,web_creator,mweb',
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
       sanitizedUrl
     ];
@@ -180,10 +180,8 @@ export function fetchMetadata(url) {
     child.on('close', (code) => {
       if (code !== 0) {
         const stderrSnippet = stderrData.trim().slice(-300);
-        let msg = `Failed to extract metadata (${stderrSnippet || 'yt-dlp exit code ' + code})`;
-        if (stderrData.includes('cookies') || stderrData.includes('login') || stderrData.includes('Private')) {
-          msg = `Content is private or requires authentication cookies (${stderrSnippet})`;
-        } else if (stderrData.includes('429') || stderrData.includes('Too Many Requests')) {
+        let msg = `Extraction error (${stderrSnippet || 'yt-dlp exit code ' + code})`;
+        if (stderrData.includes('429') || stderrData.includes('Too Many Requests')) {
           msg = `Rate limited by platform (${stderrSnippet})`;
         }
         return reject(new Error(msg));
@@ -374,7 +372,7 @@ export function downloadMedia({ url, formatId, hasAudio, isAudioOnly, resHeight,
       '--no-check-certificate',
       '--socket-timeout', '30',
       '--concurrent-fragments', '4',  // Parallel fragment downloads for faster speeds
-      '--extractor-args', 'youtube:player_client=ios,mweb',
+      '--extractor-args', 'youtube:player_client=tv_embedded,web_creator,mweb',
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
       '-o', outputTemplate,
       sanitizedUrl
