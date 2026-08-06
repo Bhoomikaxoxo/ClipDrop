@@ -73,8 +73,9 @@ router.post('/extract', async (req, res) => {
   };
   jobsStore.set(jobId, jobRecord);
 
+  let cobaltResult = null;
   try {
-    const cobaltResult = await extractVideo(url, { quality: '1080' });
+    cobaltResult = await extractVideo(url, { quality: '1080' });
 
     // ── Path A: Cobalt succeeded ────────────────────────────────────────────
     if (cobaltResult.success) {
@@ -136,9 +137,11 @@ router.post('/extract', async (req, res) => {
 
   } catch (err) {
     jobRecord.status = 'error';
-    jobRecord.error = err.message;
+    const cobaltErrText = cobaltResult ? cobaltResult.error : 'Not executed';
+    const detailedError = `Cobalt failed: ${cobaltErrText}. Local fallback failed: ${err.message}`;
+    jobRecord.error = detailedError;
     releaseJobLock(jobId);
-    return res.status(500).json({ error: err.message || 'Failed to extract video metadata.' });
+    return res.status(500).json({ error: detailedError });
   }
 
 });
