@@ -78,7 +78,7 @@ router.post('/extract', async (req, res) => {
     cobaltResult = await extractVideo(url, { quality: '1080' });
 
     // ── Path A: Cobalt succeeded ────────────────────────────────────────────
-    if (cobaltResult.success) {
+    if (cobaltResult.success && cobaltResult.downloadUrl) {
       const title = cobaltResult.filename
         ? cobaltResult.filename.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')
         : 'ClipDrop Video';
