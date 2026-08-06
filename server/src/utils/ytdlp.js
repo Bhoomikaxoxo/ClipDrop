@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import fs from 'fs';
 import path from 'path';
 import { TEMP_DIR } from './cleanup.js';
 
@@ -161,192 +162,193 @@ function getCookiesPath() {
   return null;
 }
 
-export function fetchMetadata(url) {
-  return new Promise((resolve, reject) => {
-    const { valid, platform, url: sanitizedUrl } = validateUrl(url);
-    if (!valid) {
-      return reject(new Error('Invalid or unsupported URL. Please paste an Instagram Reel or YouTube URL.'));
+const PLAYER_CLIENTS = [
+  'youtube:player_client=mweb,ios,tv_embedded',
+  'youtube:player_client=ios,web',
+  'youtube:player_client=tv_embedded,mweb'
+];
+
+function parseMetadataJson(rawJson, platform, url) {
+  const title = rawJson.title || rawJson.fulltitle || 'Untitled Video';
+  const thumbnail = rawJson.thumbnail || (rawJson.thumbnails && rawJson.thumbnails.length ? rawJson.thumbnails[rawJson.thumbnails.length - 1].url : '');
+  const durationSec = rawJson.duration || rawJson.length_seconds || 0;
+  const duration = formatDuration(durationSec, rawJson.duration_string || rawJson.duration_str) || '0:45';
+
+  const formatsList = [];
+  const rawFormats = rawJson.formats || [];
+  const heightMap = new Map();
+  let bestAudioFormat = null;
+
+  for (const fmt of rawFormats) {
+    const vcodec = fmt.vcodec || 'none';
+    const acodec = fmt.acodec || 'none';
+    const width = fmt.width;
+    const height = fmt.height;
+    const filesize = fmt.filesize || fmt.filesize_approx || null;
+
+    let effectiveRes = height;
+    if (width && height) {
+      effectiveRes = Math.min(width, height);
     }
 
-    const cookiesPath = getCookiesPath();
-
-    const args = [
-      '-J',
-      '--no-warnings',
-      '--no-playlist',
-      '--no-check-certificate',
-      '--socket-timeout', '20',
-      '--extractor-args', 'youtube:player_client=android_vr,tv_embedded',
-      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
-    ];
-
-    if (cookiesPath) {
-      args.push('--cookies', cookiesPath);
+    if (vcodec === 'none' && acodec !== 'none') {
+      const isNativeAudioAAC = isAAC(acodec);
+      if (!bestAudioFormat || isNativeAudioAAC || (filesize && (!bestAudioFormat.filesize || filesize > bestAudioFormat.filesize))) {
+        bestAudioFormat = {
+          formatId: 'bestaudio',
+          label: 'Audio Only (MP3/M4A)',
+          resHeight: 0,
+          ext: fmt.ext || 'm4a',
+          filesizeApprox: formatBytes(filesize),
+          rawBytes: filesize,
+          hasAudio: true,
+          isAudioOnly: true,
+          vcodec: 'none',
+          acodec,
+          needsTranscode: !isNativeAudioAAC
+        };
+      }
     }
 
-    args.push(sanitizedUrl);
+    if (vcodec !== 'none' && effectiveRes && effectiveRes >= 144 && effectiveRes <= 1080) {
+      const hasAudio = acodec !== 'none';
+      const isNativeVideoH264 = isH264(vcodec);
+      const isNativeAudioAAC = !hasAudio || isAAC(acodec);
+      const isNativeH264AAC = isNativeVideoH264 && isNativeAudioAAC;
+      const tbr = fmt.tbr || 0;
 
-    const child = spawn(YTDLP_BIN, args, { maxBuffer: 15 * 1024 * 1024 });
-    let stdoutData = '';
-    let stderrData = '';
-
-    child.stdout.on('data', (chunk) => {
-      stdoutData += chunk.toString();
-    });
-
-    child.stderr.on('data', (chunk) => {
-      stderrData += chunk.toString();
-    });
-
-    child.on('error', (err) => {
-      if (err.code === 'ENOENT') {
-        reject(new Error('yt-dlp is not installed or not found in system PATH on the server. Please install yt-dlp.'));
-      } else {
-        reject(err);
-      }
-    });
-
-    child.on('close', (code) => {
-      if (code !== 0) {
-        const stderrSnippet = stderrData.trim().slice(-300);
-        let msg = `Extraction error (${stderrSnippet || 'yt-dlp exit code ' + code})`;
-        if (stderrData.includes('429') || stderrData.includes('Too Many Requests')) {
-          msg = `Rate limited by platform (${stderrSnippet})`;
-        }
-        return reject(new Error(msg));
-      }
-
-      try {
-        const rawJson = JSON.parse(stdoutData);
-        const title = rawJson.title || rawJson.fulltitle || 'Untitled Video';
-        const thumbnail = rawJson.thumbnail || (rawJson.thumbnails && rawJson.thumbnails.length ? rawJson.thumbnails[rawJson.thumbnails.length - 1].url : '');
-        
-        const durationSec = rawJson.duration || rawJson.length_seconds || 0;
-        const duration = formatDuration(durationSec, rawJson.duration_string || rawJson.duration_str) || '0:45';
-
-        // Parse and dedupe formats, preferring native H.264 + AAC
-        const formatsList = [];
-        const rawFormats = rawJson.formats || [];
-
-        const heightMap = new Map();
-        let bestAudioFormat = null;
-
-        for (const fmt of rawFormats) {
-          const vcodec = fmt.vcodec || 'none';
-          const acodec = fmt.acodec || 'none';
-          const width = fmt.width;
-          const height = fmt.height;
-          const filesize = fmt.filesize || fmt.filesize_approx || null;
-
-          // Compute standard resolution indicator (min of width & height for vertical/horizontal videos)
-          let effectiveRes = height;
-          if (width && height) {
-            effectiveRes = Math.min(width, height);
-          }
-
-          // Track best audio format (prefer AAC/mp4a)
-          if (vcodec === 'none' && acodec !== 'none') {
-            const isNativeAudioAAC = isAAC(acodec);
-            if (!bestAudioFormat || isNativeAudioAAC || (filesize && (!bestAudioFormat.filesize || filesize > bestAudioFormat.filesize))) {
-              bestAudioFormat = {
-                formatId: 'bestaudio',
-                label: 'Audio Only (MP3/M4A)',
-                resHeight: 0,
-                ext: fmt.ext || 'm4a',
-                filesizeApprox: formatBytes(filesize),
-                rawBytes: filesize,
-                hasAudio: true,
-                isAudioOnly: true,
-                vcodec: 'none',
-                acodec,
-                needsTranscode: !isNativeAudioAAC
-              };
-            }
-          }
-
-          // Process video formats — capped at 1080p max
-          if (vcodec !== 'none' && effectiveRes && effectiveRes >= 144 && effectiveRes <= 1080) {
-            const hasAudio = acodec !== 'none';
-            const isNativeVideoH264 = isH264(vcodec);
-            const isNativeAudioAAC = !hasAudio || isAAC(acodec);
-            const isNativeH264AAC = isNativeVideoH264 && isNativeAudioAAC;
-            const tbr = fmt.tbr || 0;
-
-            const existing = heightMap.get(effectiveRes);
-
-            // Prefer native H.264+AAC format for this resolution even if slightly lower tbr
-            if (!existing || (!existing.isNativeH264AAC && isNativeH264AAC) || (existing.isNativeH264AAC === isNativeH264AAC && tbr > existing.tbr)) {
-              heightMap.set(effectiveRes, {
-                formatId: fmt.format_id,
-                height: effectiveRes,
-                tbr,
-                ext: fmt.ext || 'mp4',
-                filesize,
-                hasAudio,
-                vcodec,
-                acodec,
-                isNativeH264AAC,
-                needsTranscode: !isNativeH264AAC
-              });
-            }
-          }
-        }
-
-        // Sort heights descending (1080p, 720p, 480p, 360p...)
-        const sortedHeights = Array.from(heightMap.keys()).sort((a, b) => b - a);
-
-        for (const h of sortedHeights) {
-          const item = heightMap.get(h);
-          formatsList.push({
-            formatId: item.formatId,
-            label: `${h}p`,
-            resHeight: h,
-            ext: item.ext,
-            filesizeApprox: formatBytes(item.filesize),
-            rawBytes: item.filesize,
-            hasAudio: item.hasAudio,
-            isAudioOnly: false,
-            vcodec: item.vcodec,
-            acodec: item.acodec,
-            needsTranscode: item.needsTranscode
-          });
-        }
-
-        // Add Audio Only if found
-        if (bestAudioFormat) {
-          formatsList.push(bestAudioFormat);
-        }
-
-        // Fallback option if formats array couldn't map resolutions
-        if (formatsList.length === 0) {
-          formatsList.push({
-            formatId: 'best[height<=1080]',
-            label: '1080p',
-            resHeight: 1080,
-            ext: 'mp4',
-            filesizeApprox: null,
-            hasAudio: true,
-            isAudioOnly: false,
-            vcodec: 'h264',
-            acodec: 'aac',
-            needsTranscode: false
-          });
-        }
-
-        resolve({
-          title,
-          thumbnail,
-          duration,
-          durationSec,
-          platform,
-          url: sanitizedUrl,
-          formats: formatsList
+      const existing = heightMap.get(effectiveRes);
+      if (!existing || (!existing.isNativeH264AAC && isNativeH264AAC) || (existing.isNativeH264AAC === isNativeH264AAC && tbr > existing.tbr)) {
+        heightMap.set(effectiveRes, {
+          formatId: fmt.format_id,
+          height: effectiveRes,
+          tbr,
+          ext: fmt.ext || 'mp4',
+          filesize,
+          hasAudio,
+          vcodec,
+          acodec,
+          isNativeH264AAC,
+          needsTranscode: !isNativeH264AAC
         });
-      } catch (err) {
-        reject(new Error(`Failed to parse yt-dlp metadata JSON output: ${err.message}`));
       }
+    }
+  }
+
+  const sortedHeights = Array.from(heightMap.keys()).sort((a, b) => b - a);
+
+  for (const h of sortedHeights) {
+    const item = heightMap.get(h);
+    formatsList.push({
+      formatId: item.formatId,
+      label: `${h}p`,
+      resHeight: h,
+      ext: item.ext,
+      filesizeApprox: formatBytes(item.filesize),
+      rawBytes: item.filesize,
+      hasAudio: item.hasAudio,
+      isAudioOnly: false,
+      vcodec: item.vcodec,
+      acodec: item.acodec,
+      needsTranscode: item.needsTranscode
     });
-  });
+  }
+
+  if (bestAudioFormat) {
+    formatsList.push(bestAudioFormat);
+  }
+
+  if (formatsList.length === 0) {
+    formatsList.push({
+      formatId: 'best[height<=1080]',
+      label: '1080p',
+      resHeight: 1080,
+      ext: 'mp4',
+      filesizeApprox: null,
+      hasAudio: true,
+      isAudioOnly: false,
+      vcodec: 'h264',
+      acodec: 'aac',
+      needsTranscode: false
+    });
+  }
+
+  return {
+    title,
+    thumbnail,
+    duration,
+    durationSec,
+    platform,
+    url,
+    formats: formatsList
+  };
+}
+
+export async function fetchMetadata(url) {
+  const { valid, platform, url: sanitizedUrl } = validateUrl(url);
+  if (!valid) {
+    throw new Error('Invalid or unsupported URL. Please paste an Instagram Reel or YouTube URL.');
+  }
+
+  let lastError = null;
+  const cookiesPath = getCookiesPath();
+
+  // Try each player client configuration sequentially until one succeeds
+  for (const clientConfig of PLAYER_CLIENTS) {
+    try {
+      const res = await new Promise((resolve, reject) => {
+        const args = [
+          '-J',
+          '--no-warnings',
+          '--no-playlist',
+          '--no-check-certificate',
+          '--geo-bypass',
+          '--socket-timeout', '15',
+          '--extractor-args', clientConfig,
+          '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+        ];
+
+        if (cookiesPath) {
+          args.push('--cookies', cookiesPath);
+        }
+
+        args.push(sanitizedUrl);
+
+        const child = spawn(YTDLP_BIN, args, { maxBuffer: 15 * 1024 * 1024 });
+        let stdoutData = '';
+        let stderrData = '';
+
+        child.stdout.on('data', chunk => stdoutData += chunk.toString());
+        child.stderr.on('data', chunk => stderrData += chunk.toString());
+
+        child.on('error', err => {
+          if (err.code === 'ENOENT') {
+            reject(new Error('yt-dlp is not installed on the server.'));
+          } else {
+            reject(err);
+          }
+        });
+
+        child.on('close', code => {
+          if (code !== 0) {
+            return reject(new Error(stderrData.trim().slice(-300) || `yt-dlp exit ${code}`));
+          }
+          try {
+            resolve(JSON.parse(stdoutData));
+          } catch (e) {
+            reject(new Error('Failed to parse yt-dlp JSON response'));
+          }
+        });
+      });
+
+      return parseMetadataJson(res, platform);
+    } catch (err) {
+      lastError = err;
+      console.warn(`[yt-dlp] Client config "${clientConfig}" failed, trying fallback client...`);
+    }
+  }
+
+  throw new Error(`Unable to extract video metadata. ${lastError ? lastError.message : ''}`);
 }
 
 /**
