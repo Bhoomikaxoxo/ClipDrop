@@ -50,7 +50,7 @@ export async function extractVideo(url, options = {}) {
     url,
     videoQuality,
     audioFormat: 'mp3',
-    filenamePattern: 'basic'
+    filenameStyle: 'basic'
   };
 
   if (isAudioOnly) {
