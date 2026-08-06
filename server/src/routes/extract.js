@@ -141,6 +141,27 @@ router.post('/extract', async (req, res) => {
     const detailedError = `Cobalt failed: ${cobaltErrText}. Local fallback failed: ${err.message}`;
     jobRecord.error = detailedError;
     releaseJobLock(jobId);
+
+    // Log the full technical error on the server side for debugging
+    console.error('[Extraction Pipeline Failed]', detailedError);
+
+    // Check if the failure is due to a login, age check, or anti-scraping block
+    const isLoginRequired = 
+      cobaltErrText.includes('error.api.youtube.login') ||
+      cobaltErrText.includes('error.api.fetch.empty') ||
+      cobaltErrText.includes('error.api.content.private') ||
+      err.message.toLowerCase().includes('sign in to confirm') ||
+      err.message.toLowerCase().includes('confirm your age') ||
+      err.message.toLowerCase().includes('cookies') ||
+      err.message.toLowerCase().includes('login') ||
+      err.message.toLowerCase().includes('private video');
+
+    if (isLoginRequired) {
+      return res.status(403).json({
+        error: "This content requires a logged-in session to access and can't be downloaded through this tool."
+      });
+    }
+
     return res.status(500).json({ error: detailedError });
   }
 
