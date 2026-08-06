@@ -64,8 +64,24 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message || 'Internal Server Error' });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`\n💧 ClipDrop Backend Server running on http://localhost:${PORT}`);
   console.log(`   Temp directory initialized at /server/temp`);
   console.log(`   Waiting for extraction & download requests...\n`);
 });
+
+// Graceful shutdown on SIGTERM (Render spin-down / Docker stop)
+// Without this, node exits immediately mid-request when Render kills the container.
+process.on('SIGTERM', () => {
+  console.log('[ClipDrop] SIGTERM received — shutting down gracefully');
+  server.close(() => {
+    console.log('[ClipDrop] HTTP server closed — all connections drained');
+    process.exit(0);
+  });
+  // Force exit after 10s if long-running yt-dlp/download requests don't resolve
+  setTimeout(() => {
+    console.log('[ClipDrop] Forcing exit after 10s timeout');
+    process.exit(0);
+  }, 10000).unref();
+});
+
