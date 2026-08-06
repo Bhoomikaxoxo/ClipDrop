@@ -10,9 +10,8 @@ import fetch from 'node-fetch';
 // Default list of Cobalt API instances (supports custom URL or API key via ENV)
 const DEFAULT_INSTANCES = [
   process.env.COBALT_API_URL,
-  'https://api.cobalt.tools/',
-  'https://co.wuk.sh/',
-  'https://cobalt.api.sc7.io/'
+  'https://dog.kittycat.boo/',
+  'https://cobaltapi.cjs.nz/'
 ].filter(Boolean);
 
 /**
