@@ -25,21 +25,54 @@ export default function App() {
   }, []);
   const toggleBg = () => { const n = !bg; setBg(n); localStorage.setItem('cd_bg', n ? '1' : '0'); };
 
-  const extract = async (url) => {
+  const extract = async (url, attempt = 1) => {
     setError(''); setMetadata(null); setProgress(null);
-    setIsExtracting(true); setLoadingStage('Resolving link...');
+    setIsExtracting(true);
+    setLoadingStage(attempt === 1 ? 'Resolving link...' : 'Waking up server (may take ~60s)...');
+
     const t = setTimeout(() => setLoadingStage('Fetching formats...'), 1500);
+    const controller = new AbortController();
+    // 70s timeout: covers Render free-tier 50s cold-start + Cobalt/yt-dlp extraction time
+    const timeoutId = setTimeout(() => controller.abort(), 70000);
+
     try {
       const r = await fetch(`${API}/api/extract`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
+        signal: controller.signal,
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Failed to extract.');
       setMetadata(d); setJobId(d.jobId);
-    } catch (e) { setError(e.message); }
-    finally { clearTimeout(t); setIsExtracting(false); setLoadingStage(''); }
+    } catch (e) {
+      // On network error (cold-start / connection refused), retry once automatically
+      const isNetworkError = e.name === 'AbortError'
+        || e.message === 'Load failed'
+        || e.message === 'Failed to fetch'
+        || e.message === 'NetworkError when attempting to fetch resource.';
+
+      if (isNetworkError && attempt === 1) {
+        clearTimeout(t); clearTimeout(timeoutId);
+        setIsExtracting(false);
+        setLoadingStage('');
+        // Brief pause then retry — server may still be warming up
+        setTimeout(() => extract(url, 2), 2000);
+        return;
+      }
+
+      // Map AbortError (70s timeout on retry) to a readable message
+      setError(
+        e.name === 'AbortError'
+          ? 'Server is taking too long to respond. Please try again in a moment.'
+          : e.message
+      );
+    } finally {
+      clearTimeout(t); clearTimeout(timeoutId);
+      setIsExtracting(false); setLoadingStage('');
+    }
   };
+
 
   const startDownload = async (formatId) => {
     if (!jobId || !metadata) return;
