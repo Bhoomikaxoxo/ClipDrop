@@ -42,9 +42,26 @@ export default function App() {
         body: JSON.stringify({ url }),
         signal: controller.signal,
       });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Failed to extract.');
-      setMetadata(d); setJobId(d.jobId);
+
+      let errorMsg = 'Failed to extract.';
+      const contentType = r.headers.get('content-type') || '';
+      
+      if (contentType.includes('application/json')) {
+        const d = await r.json();
+        if (r.ok) {
+          setMetadata(d);
+          setJobId(d.jobId);
+          return;
+        }
+        errorMsg = d.error || errorMsg;
+      } else {
+        const text = await r.text();
+        if (!r.ok) {
+          errorMsg = `Server Error (${r.status}): ${text.slice(0, 150) || r.statusText}`;
+        }
+      }
+      
+      throw new Error(errorMsg);
     } catch (e) {
       // On network error (cold-start / connection refused), retry once automatically
       const isNetworkError = e.name === 'AbortError'
@@ -89,12 +106,34 @@ export default function App() {
     es.onerror = () => es.close();
     try {
       const r = await fetch(`${API}/api/download`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId, formatId, url: metadata?.url || urlValue }),
       });
-      const d = await r.json();
-      if (!r.ok) { es.close(); throw new Error(d.error || 'Download failed.'); }
-    } catch (e) { es.close(); setIsDownloading(false); setError(e.message); }
+
+      let errorMsg = 'Download failed.';
+      const contentType = r.headers.get('content-type') || '';
+      
+      if (contentType.includes('application/json')) {
+        const d = await r.json();
+        if (r.ok) {
+          return;
+        }
+        errorMsg = d.error || errorMsg;
+      } else {
+        const text = await r.text();
+        if (!r.ok) {
+          errorMsg = `Server Error (${r.status}): ${text.slice(0, 150) || r.statusText}`;
+        }
+      }
+      
+      es.close();
+      throw new Error(errorMsg);
+    } catch (e) {
+      es.close();
+      setIsDownloading(false);
+      setError(e.message);
+    }
   };
 
   const save = (url) => {
